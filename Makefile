@@ -4,16 +4,16 @@ CHART_VERSION ?= latest
 
 CHART_REPO := gs://jenkinsxio/charts
 
+ifeq ($(CHART_VERSION),latest)
+	CHART_MANIFEST_URL := https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
+else
+	CHART_MANIFEST_URL := https://storage.googleapis.com/tekton-releases/pipeline/previous/v${CHART_VERSION}/release.yaml
+endif
+
 fetch:
 	rm -f ${CHART_DIR}/templates/*.yaml
 	mkdir -p ${CHART_DIR}/templates
-ifeq ($(CHART_VERSION),latest)
-	curl -sS https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml > ${CHART_DIR}/templates/resource.yaml
-else
-	curl -sS https://storage.googleapis.com/tekton-releases/pipeline/previous/v${CHART_VERSION}/release.yaml > ${CHART_DIR}/templates/resource.yaml
-endif
-	jx gitops split -d ${CHART_DIR}/templates
-	jx gitops rename -d ${CHART_DIR}/templates
+	shell curl -sS ${CHART_MANIFEST_URL} | python split_yaml.py ${CHART_DIR}/templates
 	# move content of data: from feature-slags-cm.yaml to featureFlags: in values.yaml
 	yq -i '.featureFlags = load("$(CHART_DIR)/templates/feature-flags-cm.yaml").data' $(CHART_DIR)/values.yaml
 	yq -i '.data = null' $(CHART_DIR)/templates/feature-flags-cm.yaml
@@ -21,12 +21,11 @@ endif
 	yq -i '.configDefaults = load("$(CHART_DIR)/templates/config-defaults-cm.yaml").data' $(CHART_DIR)/values.yaml
 	yq -i '.data = null' $(CHART_DIR)/templates/config-defaults-cm.yaml
 	# kustomize the resources to include some helm template blocs
-	kustomize build ${CHART_DIR} | sed '/helmTemplateRemoveMe/d' > ${CHART_DIR}/templates/resource.yaml
-	jx gitops split -d ${CHART_DIR}/templates
-	jx gitops rename -d ${CHART_DIR}/templates
+	shell kustomize build ${CHART_DIR} | sed '/helmTemplateRemoveMe/d' | python split_yaml.py ${CHART_DIR}/templates
 	cp src/templates/* ${CHART_DIR}/templates
 ifneq ($(CHART_VERSION),latest)
 	sed -i "s/^appVersion:.*/appVersion: ${CHART_VERSION}/" ${CHART_DIR}/Chart.yaml
+	sed -Ei '/(version|release):/{s/v'${CHART_VERSION}'/v{{ .Chart.AppVersion }}/}' ${CHART_DIR}/templates/*.yaml
 endif
 
 build:
