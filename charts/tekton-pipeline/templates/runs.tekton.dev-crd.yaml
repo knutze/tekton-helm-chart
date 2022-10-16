@@ -19,8 +19,8 @@ metadata:
   labels:
     app.kubernetes.io/instance: default
     app.kubernetes.io/part-of: tekton-pipelines
-    pipeline.tekton.dev/release: "v0.32.4"
-    version: "v0.32.4"
+    pipeline.tekton.dev/release: "v{{ .Chart.AppVersion }}"
+    version: "v{{ .Chart.AppVersion }}"
 spec:
   group: tekton.dev
   preserveUnknownFields: false
@@ -59,6 +59,7 @@ spec:
   names:
     kind: Run
     plural: runs
+    singular: run
     categories:
       - tekton
       - tekton-pipelines
